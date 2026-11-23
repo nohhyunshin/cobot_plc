@@ -1,0 +1,114 @@
+#  [PLC가 보내는 신호 - 컨트롤러 디지털 출력]
+#   DO1 = 1번    DO2 = 2번    DO3 = 3번
+#   DO4 = 4번    DO5 = 5번    DO6 = 6번    DO7 = 불량
+
+# [로봇이 보내는 신호]
+# DO8 = 홈 위치
+# DO9 = DONE
+
+# 리모트 모드 대시보드에서 볼 상태 변수
+step = 0             # 0 = 대기 / 1 = pick / 2 = place / 3 = 완료 대기
+last_p = -1
+
+DO_NG = 7						# 불량
+DO_HOME = 8					# 홈 위치
+DONE_SIG=9					# 한 태스크 종료 신호
+DO_PLACE_FIRST = 1			# place 시작 번호 (DO1 = 1번칸 ... DO6 = 6번칸)
+GRIP_OPEN = 15				# 그리퍼 열기
+GRIP_CLOSE = 16				# 그리퍼 닫기
+APP = 100						# 접근 거리(mm) : 100
+NG = 6							# 불량일 때 read_place가 돌려주는 값
+
+# 그리퍼 동작
+def grip_open() : 
+	set_digital_output(GRIP_CLOSE, OFF)
+	set_digital_output(GRIP_OPEN, ON)
+	wait(0.5)
+
+def grip_close() :
+	set_digital_output(GRIP_OPEN, OFF)
+	set_digital_output(GRIP_CLOSE, ON)
+	wait(0.5)
+
+
+# 이동 동작
+# 1. 홈 위치로 이동
+def go_home() :
+	movel(System_home, vel = 100, acc = 300)
+
+# 접근 위치 (베이스 기준) : approach
+def app_base(p):
+	return trans(p, [0, 0, APP, 0, 0, 0], DR_BASE, DR_BASE)
+
+# 2. pick 위치에서 집기
+def pick_from(p) :
+	grip_open()
+	movel(app_base(p), vel = 50, acc = 100)
+	movel(p, vel = 50, acc = 100)
+	grip_close()
+	movel(app_base(p), vel = 50, acc = 100)
+	
+# 3. place 위치에 놓기
+def place_to(p) :
+	movel(app_base(p), vel = 50, acc = 100)
+	movel(p, vel = 50, acc = 100)
+	grip_open()
+	movel(app_base(p), vel = 50, acc = 100)
+
+# 티칭 place 위치
+places = [System_place1, System_place2, System_place3,
+         System_place4, System_place5, System_place6, System_faulty]
+
+# 신호 읽기 / 지우기
+def read_place() :
+	for i in range(6) :
+		if get_digital_output(DO_PLACE_FIRST + i) == ON :
+			return i
+	if get_digital_output(DO_NG) == ON :
+		return 6
+	return -1
+
+# PLC에서 신호 들어올 때까지 대기
+def wait_PLC() :
+	while True :
+		p = read_place()
+		if p != -1 :
+			return p
+		wait(0.1)
+
+# 동작이 끝나면 PLC 신호 모두 끔
+def clear_place() :
+	for i in range(1, 8) :
+		set_digital_output(i, OFF)
+
+# 메인 프로그램
+set_digital_output(DONE_SIG, OFF)
+clear_place()
+grip_open()
+go_home()
+set_digital_output(DO_HOME, ON)
+
+while True :
+	step = 0
+	p = read_place()
+	
+	while p == -1 :
+		wait(0.1)
+		p = read_place()
+	last_p = p
+	
+	# pick 위치로 이동
+	step = 1
+	pick_from(System_pick)
+	set_digital_output(DO_HOME, OFF)
+	go_home()
+
+	# place 위치로 이동
+	step = 2
+	place_to(places[p])
+
+	# 신호 정리
+	clear_place()
+	go_home()
+	set_digital_output(DO_HOME, ON)
+	set_digital_output(DONE_SIG, ON)
