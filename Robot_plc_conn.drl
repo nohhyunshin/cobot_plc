@@ -1,6 +1,6 @@
-#  [PLC가 보내는 신호 - 컨트롤러 디지털 출력]
-#  DO1 = 1번    DO2 = 2번    DO3 = 3번
-#  DO4 = 4번    DO5 = 5번    DO6 = 6번    DO7 = 불량
+# [PLC가 보내는 신호 - 컨트롤러 디지털 출력]
+# DO1 = 1번    DO2 = 2번    DO3 = 3번
+# DO4 = 4번    DO5 = 5번    DO6 = 6번    DO7 = 불량
 
 # [로봇이 보내는 신호]
 # DO8 = 홈 위치
@@ -71,6 +71,7 @@ def read_place() :
 # PLC에서 신호 들어올 때까지 대기
 def wait_PLC() :
 	while True :
+		set_digital_output(DO_HOME, ON)
 		p = read_place()
 		if p != -1 :
 			return p
@@ -112,4 +113,5 @@ while True :
 	step = 3
 
 	while read_place() != -1 :
+		set_digital_output(DO_HOME, ON)
 		wait(0.1)
